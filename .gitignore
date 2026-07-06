@@ -1,0 +1,13 @@
+memory.md
+*.pyc
+__pycache__/
+*.state
+pending_queue.json
+.env
+stealth_bot.session
+stealth_bot.session-journal
+stealth_bot.session.journal
+*.session
+*.session-journal
+*.session.journal
+stealth_dl_local.py
