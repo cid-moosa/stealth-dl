@@ -1,11 +1,24 @@
 # ▲ Stealth Telegram Downloader (stealth-dl)
 
+```text
+   ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄  ▄▄▄     ▄▄▄▄▄▄▄ ▄▄   ▄▄    ▄▄▄▄▄▄  ▄▄
+  █       █       █       █      ██   █   █       █  █ █  █  █      ██  █
+  █  ▄▄▄▄▄█▄     ▄█    ▄──█  ▄    █   █   █    ▄──█  █▄█  █  █  ▄    █  █
+  █ █▄▄▄▄▄  █   █ █   █▄▄ █ █ █   █   █   █   █▄▄ █       █  █ █ █   █  █
+  █▄▄▄▄▄  █ █   █ █    ──██ █▄█   █   █▄▄ █    ──██       █  █ █▄█   █  █▄▄▄▄▄
+   ▄▄▄▄▄█ █ █   █ █   █▄▄ █       █       █   █▄▄ █   ▄   █  █       █       █
+  █▄▄▄▄▄▄▄█ █▄▄▄█ █▄▄▄▄▄▄▄█▄▄▄▄▄▄█ █▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄█ █▄▄█  █▄▄▄▄▄▄█▄▄▄▄▄▄▄▄█
+```
+
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Engine](https://img.shields.io/badge/engine-parallel%20MTProto-magenta.svg)](#-architecture)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-black.svg)](https://github.com/astral-sh/ruff)
 
 A private, high-speed, and resilient Telegram media downloader daemon designed to run on self-hosted home servers. It automatically downloads movies, series, or files forwarded or dropped into its chat and saves them directly to your storage directory, with boot-time queue recovery and ghost deletion of processed messages.
+
+### 🖥️ Live TUI Console Dashboard Preview
+![Stealth Downloader Live TUI Preview](assets/preview.png)
 
 ---
 
