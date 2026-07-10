@@ -109,28 +109,50 @@ def main():
             console.print(f"[bold red][x] Error writing `.env` file: {e}[/bold red]")
             sys.exit(1)
 
-    # 2. Read stealth_dl.py and generate stealth_dl_local.py with animated spinner
-    if os.path.exists("stealth_dl.py"):
-        with console.status("[bold magenta]Generating standalone `stealth_dl_local.py`...[/bold magenta]", spinner="clock") as status:
-            time.sleep(1.0)  # Smooth transition animation
-            try:
-                with open("stealth_dl.py", "r", encoding="utf-8") as f:
-                    content = f.read()
+    # 2. Generate standalone `stealth_dl_local.py` with animated spinner
+    with console.status("[bold magenta]Generating standalone `stealth_dl_local.py`...[/bold magenta]", spinner="clock") as status:
+        time.sleep(1.0)  # Smooth transition animation
+        try:
+            local_content = f"""#!/usr/bin/env python3
+\"\"\"
+Stealth Telegram Downloader — Standalone Local Client
+\"\"\"
+import os
+import sys
 
-                # Perform placeholder replacement
-                content = content.replace('int(os.getenv("TG_API_ID", "0"))  # TG_API_ID_PLACEHOLDER', api_id)
-                content = content.replace('os.getenv("TG_API_HASH", "")  # TG_API_HASH_PLACEHOLDER', f'"{api_hash}"')
-                content = content.replace('os.getenv("TG_BOT_TOKEN", "")  # TG_BOT_TOKEN_PLACEHOLDER', f'"{bot_token}"')
-                content = content.replace('int(os.getenv("TG_ALLOWED_USER_ID", "0"))  # TG_ALLOWED_USER_ID_PLACEHOLDER', allowed_user_id)
-                content = content.replace('os.getenv("TG_DOWNLOAD_DIR", "/DATA/Media/Movies/")  # TG_DOWNLOAD_DIR_PLACEHOLDER', f'"{download_dir}"')
+# Embedded configuration credentials
+os.environ["TG_API_ID"] = "{api_id}"
+os.environ["TG_API_HASH"] = "{api_hash}"
+os.environ["TG_BOT_TOKEN"] = "{bot_token}"
+os.environ["TG_ALLOWED_USER_ID"] = "{allowed_user_id}"
+os.environ["TG_DOWNLOAD_DIR"] = "{download_dir}"
 
-                with open("stealth_dl_local.py", "w", encoding="utf-8") as f:
-                    f.write(content)
-                console.print("[bold magenta][✓] Standalone executable `stealth_dl_local.py` generated with embedded credentials.[/bold magenta]")
-            except Exception as e:
-                console.print(f"[bold yellow][!] Warning generating standalone client: {e}[/bold yellow]")
-    else:
-         console.print("[bold yellow][!] Base script `stealth_dl.py` not found. Standalone compilation skipped.[/bold yellow]")
+from stealth_dl.config import DOWNLOAD_DIR, ALLOWED_USER_ID, PARALLEL_WORKERS, IGNITION_DELAY
+from stealth_dl.state import IS_TTY, log
+from stealth_dl.bot import bot, run_daemon
+
+if __name__ == "__main__":
+    if not IS_TTY:
+        log.info("━" * 60)
+        log.info("  ANTI-GRAVITY STEALTH DOWNLOADER — JSON Recovery Edition (Local)")
+        log.info("  Target dir : %s", DOWNLOAD_DIR)
+        log.info("  Authorized : %s", ALLOWED_USER_ID)
+        log.info("  Engine     : %d-worker parallel connection pool", PARALLEL_WORKERS)
+        log.info("  Ignition   : %ds delay", IGNITION_DELAY)
+        log.info("  Queue mode : sequential (persistent recovery-enabled)")
+        log.info("  Commands   : /pause /resume /cancel /queue /clear")
+        log.info("━" * 60)
+
+    try:
+        bot.loop.run_until_complete(run_daemon())
+    except KeyboardInterrupt:
+        log.info("🛑 Daemon terminated by user.")
+"""
+            with open("stealth_dl_local.py", "w", encoding="utf-8") as f:
+                f.write(local_content)
+            console.print("[bold magenta][✓] Standalone executable `stealth_dl_local.py` generated with embedded credentials.[/bold magenta]")
+        except Exception as e:
+            console.print(f"[bold yellow][!] Warning generating standalone client: {e}[/bold yellow]")
 
     console.print()
     console.print(Panel(
