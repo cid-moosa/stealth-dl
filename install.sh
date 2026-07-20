@@ -9,15 +9,15 @@ if [ -n "$NO_COLOR" ]; then
     IS_TTY=0
 fi
 
-# Colors & Formatting (POSIX \033 compatible)
+# Colors & Formatting (POSIX ANSI escape bytes)
 if [ "$IS_TTY" -eq 1 ]; then
-    CLR_CYAN="\033[36m"
-    CLR_GREEN="\033[32m"
-    CLR_RED="\033[31m"
-    CLR_MAGENTA="\033[35m"
-    CLR_YELLOW="\033[33m"
-    CLR_BOLD="\033[1m"
-    CLR_RESET="\033[0m"
+    CLR_CYAN="$(printf '\033[36m')"
+    CLR_GREEN="$(printf '\033[32m')"
+    CLR_RED="$(printf '\033[31m')"
+    CLR_MAGENTA="$(printf '\033[35m')"
+    CLR_YELLOW="$(printf '\033[33m')"
+    CLR_BOLD="$(printf '\033[1m')"
+    CLR_RESET="$(printf '\033[0m')"
 else
     CLR_CYAN=""
     CLR_GREEN=""
@@ -49,11 +49,9 @@ run_with_spinner() {
     local msg="$2"
     
     if [ "$IS_TTY" -eq 1 ]; then
-        # Run command in background, hide output
         eval "$cmd" >/dev/null 2>&1 &
         local pid=$!
         
-        # Hide cursor
         tput civis 2>/dev/null
         
         local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
@@ -70,11 +68,9 @@ run_with_spinner() {
             done
         done
         
-        # Wait for actual command exit code
         wait "$pid"
         local exit_code=$?
         
-        # Clear line and show cursor
         printf "\r\033[K"
         tput cnorm 2>/dev/null
         return $exit_code
@@ -117,33 +113,46 @@ python_ver=$(python3 --version 2>&1)
 printf "\r${CLR_GREEN}[✓]${CLR_RESET} Python3 found: $python_ver\n"
 sleep 0.3
 
-# 2. Virtual Environment / Dependency Resolution
-PY_CMD="python3"
-PIP_CMD="pip3"
-
+# 2. Virtual Environment & Dependency Resolution
 echo
 typewriter "${CLR_BOLD}Setting up virtual environment & dependencies...${CLR_RESET}"
 
-# Attempt venv creation to support Debian PEP 668 externally-managed environments
+# Create virtualenv if not present
 if [ ! -d "venv" ]; then
     run_with_spinner "python3 -m venv venv" "Creating isolated virtual environment (venv)"
 fi
 
-if [ -f "venv/bin/pip" ]; then
+if [ -f "venv/bin/python" ]; then
     PY_CMD="./venv/bin/python"
-    PIP_CMD="./venv/bin/pip"
+    # Ensure pip is bootstrapped inside venv
+    $PY_CMD -m ensurepip --default-pip >/dev/null 2>&1
+    
     printf "${CLR_GREEN}[✓] Using isolated venv environment at ./venv${CLR_RESET}\n"
-    run_with_spinner "$PIP_CMD install -r requirements.txt" "Installing python packages (telethon, cryptg, rich, dotenv)"
+    run_with_spinner "$PY_CMD -m pip install -r requirements.txt" "Installing python packages (telethon, cryptg, rich, dotenv)"
     INSTALL_RES=$?
+    
+    # Fallback if cryptg C-compiler build failed on minimal Linux
+    if [ $INSTALL_RES -ne 0 ]; then
+        printf "${CLR_YELLOW}[!] Installing core dependencies (without C-compiled cryptg module)...${CLR_RESET}\n"
+        run_with_spinner "$PY_CMD -m pip install telethon python-dotenv rich" "Installing core python packages"
+        INSTALL_RES=$?
+    fi
 else
-    printf "${CLR_YELLOW}[!] venv module not found, attempting system pip installation...${CLR_RESET}\n"
-    run_with_spinner "pip3 install -r requirements.txt --break-system-packages" "Installing python packages via system pip"
+    # Fallback for system environment
+    PY_CMD="python3"
+    printf "${CLR_YELLOW}[!] venv not found, attempting system pip installation...${CLR_RESET}\n"
+    run_with_spinner "python3 -m pip install -r requirements.txt --break-system-packages" "Installing python packages via system pip"
     INSTALL_RES=$?
+    
+    if [ $INSTALL_RES -ne 0 ]; then
+        run_with_spinner "python3 -m pip install telethon python-dotenv rich --break-system-packages" "Installing core python packages"
+        INSTALL_RES=$?
+    fi
 fi
 
 if [ $INSTALL_RES -ne 0 ]; then
-    printf "${CLR_RED}[x] Failed to install dependencies via pip.${CLR_RESET}\n"
-    printf "On Debian/Ubuntu, please install python3-venv: sudo apt install python3-venv\n"
+    printf "${CLR_RED}[x] Failed to install dependencies.${CLR_RESET}\n"
+    printf "On Debian/Ubuntu, please run: sudo apt install python3-pip python3-full\n"
     exit 1
 fi
 printf "${CLR_GREEN}[✓] Dependencies successfully resolved.${CLR_RESET}\n"
@@ -164,4 +173,4 @@ fi
 typewriter "${CLR_BOLD}Installation finished!${CLR_RESET}"
 printf "${CLR_CYAN}To run as a continuous background daemon that survives reboots:${CLR_RESET}\n"
 printf "  • Start in background:   ${CLR_BOLD}./start.sh start${CLR_BOLD}\n"
-printf "  • Install system service: ${CLR_BOLD}sudo cp stealth-dl.service /etc/systemd/system/ && sudo systemctl enable --now stealth-dl${CLR_RESET}\n\n"
+printf "  • Install system service: ${CLR_BOLD}sudo ./start.sh install-service${CLR_RESET}\n\n"
