@@ -61,6 +61,40 @@ async def handler(event):
 
     text = (event.raw_text or "").strip().lower()
 
+    # ━━━━━━━━ Online status check query handler ━━━━━━━━━━━━━━━━━━━━
+    online_queries = {
+        "are you online?", "are you online", "online?", "online",
+        "are you alive?", "are you alive", "ping", "/ping",
+        "alive", "you online?", "you online", "status", "/status"
+    }
+
+    if text in online_queries or text.startswith("are you online") or text.startswith("you online"):
+        state = active_download["state"]
+        pending = download_queue.qsize()
+        fname = active_download.get("filename", "")
+
+        if state == "idle":
+            state_str = "💤 Idle — ready for media drops"
+        elif state == "downloading":
+            pct = (active_download["offset"] * 100 / active_download["total"]) if active_download["total"] > 0 else 0
+            state_str = f"⬇️ Downloading `{fname}` ({pct:.1f}%)"
+        elif state == "paused":
+            state_str = f"⏸ Paused: `{fname}`"
+        else:
+            state_str = f"🔄 State: `{state}`"
+
+        await event.reply(
+            "🟢 **Yes, I am online and operational!**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🖥️ **Status**: Online & Ready\n"
+            f"📂 **Storage**: `{DOWNLOAD_DIR}`\n"
+            f"⚡ **Engine**: {PARALLEL_WORKERS}-worker parallel pool\n"
+            f"📋 **Queue**: `{pending}` file(s) pending\n"
+            f"⏱️ **Activity**: {state_str}\n\n"
+            f"Drop or forward media files anytime to start downloading."
+        )
+        return
+
     # ━━━━━━━━ /start ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if text == "/start":
         await event.reply(
