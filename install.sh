@@ -188,13 +188,24 @@ if [ "$1" != "--auto" ] && [ "$1" != "-y" ]; then
     $PY_CMD configure.py
 fi
 
-# 4. Background Service Prompt
+# 4. Optional Post-Setup Cleanup
+cleanup_files() {
+    printf "${CLR_CYAN}[🧹] Cleaning up installation files (LICENSE, README.md, install.bat)...${CLR_RESET}\n"
+    rm -f LICENSE README.md install.bat 2>/dev/null
+}
+
+if [ "$1" == "--clean" ]; then
+    cleanup_files
+fi
+
+# 5. Background Service Prompt & Auto-Launch
 echo
 if [ -f "start.sh" ]; then
     chmod +x start.sh
 fi
 
 typewriter "${CLR_BOLD}Automated installation completed successfully!${CLR_RESET}"
-printf "${CLR_CYAN}To run as a continuous background daemon that survives reboots:${CLR_RESET}\n"
-printf "  • Start in background:   ${CLR_BOLD}./start.sh start${CLR_BOLD}\n"
-printf "  • Install system service: ${CLR_BOLD}sudo ./start.sh install-service${CLR_RESET}\n\n"
+printf "${CLR_CYAN}Daemon management options:${CLR_RESET}\n"
+printf "  • Start in background (SSH-resilient): ${CLR_BOLD}./start.sh start${CLR_BOLD}\n"
+printf "  • Start in foreground (interactive):    ${CLR_BOLD}./start.sh fg${CLR_BOLD}\n"
+printf "  • Install boot autostart service:       ${CLR_BOLD}sudo ./start.sh install-service${CLR_RESET}\n\n"

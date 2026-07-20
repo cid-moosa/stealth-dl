@@ -12,9 +12,9 @@ LOG_FILE="$CDIR/stealth_dl.log"
 check_and_heal_dependencies() {
     local needs_heal=0
 
-    if [ -f "$CDIR/venv/bin/python" ]; (
+    if [ -f "$CDIR/venv/bin/python" ]; then
         PYTHON_BIN="$CDIR/venv/bin/python"
-    ); else
+    else
         PYTHON_BIN="$(which python3 2>/dev/null)"
     fi
 
@@ -56,10 +56,9 @@ get_pid() {
     pgrep -f "python.*stealth_dl" | head -n 1
 }
 
-start_daemon() {
+start_daemon_bg() {
     check_and_heal_dependencies
 
-    # Refresh python binary path in case venv was created by self-healing
     if [ -f "$CDIR/venv/bin/python" ]; then
         PYTHON_BIN="$CDIR/venv/bin/python"
     fi
@@ -70,19 +69,33 @@ start_daemon() {
         return 0
     fi
 
-    echo -e "\033[36m[⚡] Starting Stealth Downloader daemon in background...\033[0m"
+    echo -e "\033[36m[⚡] Launching Stealth Downloader in persistent background mode...\033[0m"
+    # Execute detached with nohup & disown to remain active after SSH disconnection
     nohup "$PYTHON_BIN" "$TARGET_SCRIPT" > "$LOG_FILE" 2>&1 &
     local new_pid=$!
+    disown $new_pid 2>/dev/null
     echo "$new_pid" > "$PID_FILE"
     
     sleep 1
     if kill -0 "$new_pid" 2>/dev/null; then
-        echo -e "\033[32m[✓] Daemon started successfully (PID: $new_pid).\033[0m"
-        echo -e "\033[32m[✓] Running continuously in background until system reboot/shutdown.\033[0m"
-        echo -e "\033[35m[i] Logs available at: $LOG_FILE\033[0m"
+        echo -e "\033[32m[✓] Daemon started in background (PID: $new_pid).\033[0m"
+        echo -e "\033[32m[✓] Immune to SSH disconnection. Runs continuously until reboot/shutdown.\033[0m"
+        echo -e "\033[35m[i] Activity log: $LOG_FILE\033[0m"
+        echo -e "\033[35m[i] Control commands: ./start.sh stop | ./start.sh status\033[0m"
     else
         echo -e "\033[31m[x] Failed to start daemon. Check $LOG_FILE for details.\033[0m"
     fi
+}
+
+start_daemon_fg() {
+    check_and_heal_dependencies
+
+    if [ -f "$CDIR/venv/bin/python" ]; then
+        PYTHON_BIN="$CDIR/venv/bin/python"
+    fi
+
+    echo -e "\033[36m[⚡] Launching Stealth Downloader interactive TUI in foreground...\033[0m"
+    "$PYTHON_BIN" "$TARGET_SCRIPT"
 }
 
 stop_daemon() {
@@ -155,15 +168,18 @@ EOF
 }
 
 case "$1" in
-    start)
-        start_daemon
+    start|bg|background)
+        start_daemon_bg
+        ;;
+    fg|foreground|interactive)
+        start_daemon_fg
         ;;
     stop)
         stop_daemon
         ;;
     restart)
         stop_daemon
-        start_daemon
+        start_daemon_bg
         ;;
     status)
         status_daemon
@@ -172,11 +188,6 @@ case "$1" in
         install_systemd_service
         ;;
     *)
-        if [ -z "$1" ]; then
-            start_daemon
-        else
-            echo "Usage: $0 {start|stop|restart|status|install-service}"
-            exit 1
-        fi
+        start_daemon_bg
         ;;
 esac

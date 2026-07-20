@@ -1,9 +1,19 @@
-#!/usr/bin/env python3
+#!/bin/bash
+"exec" "$(dirname "$0")/venv/bin/python" "$0" "$@" 2>/dev/null || "exec" python3 "$0" "$@"
+# -*- coding: utf-8 -*-
 """
-Stealth Telegram Downloader — JSON Recovery Edition Entry Point
+Stealth Telegram Downloader — Entry Point with Venv Auto-Reexec
 """
 
+import os
 import sys
+
+# Self-bootstrapping venv launcher: re-exec under local ./venv if available
+base_dir = os.path.dirname(os.path.abspath(__file__))
+venv_python = os.path.join(base_dir, "venv", "bin", "python")
+if os.name != "nt" and os.path.exists(venv_python) and os.path.abspath(sys.executable) != os.path.abspath(venv_python):
+    os.execv(venv_python, [venv_python] + sys.argv)
+
 from stealth_dl.config import DOWNLOAD_DIR, ALLOWED_USER_ID, PARALLEL_WORKERS, IGNITION_DELAY
 from stealth_dl.state import IS_TTY, log
 from stealth_dl.bot import bot, run_daemon
