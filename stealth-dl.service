@@ -1,0 +1,17 @@
+[Unit]
+Description=Stealth Downloader — High-Speed Telegram Daemon
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%WORKING_DIR%
+ExecStart=%PYTHON_BIN% %WORKING_DIR%/stealth_dl.py
+Restart=always
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

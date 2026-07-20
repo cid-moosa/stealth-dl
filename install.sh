@@ -9,15 +9,15 @@ if [ -n "$NO_COLOR" ]; then
     IS_TTY=0
 fi
 
-# Colors & Formatting
+# Colors & Formatting (POSIX \033 compatible)
 if [ "$IS_TTY" -eq 1 ]; then
-    CLR_CYAN="\e[36m"
-    CLR_GREEN="\e[32m"
-    CLR_RED="\e[31m"
-    CLR_MAGENTA="\e[35m"
-    CLR_YELLOW="\e[33m"
-    CLR_BOLD="\e[1m"
-    CLR_RESET="\e[0m"
+    CLR_CYAN="\033[36m"
+    CLR_GREEN="\033[32m"
+    CLR_RED="\033[31m"
+    CLR_MAGENTA="\033[35m"
+    CLR_YELLOW="\033[33m"
+    CLR_BOLD="\033[1m"
+    CLR_RESET="\033[0m"
 else
     CLR_CYAN=""
     CLR_GREEN=""
@@ -75,7 +75,7 @@ run_with_spinner() {
         local exit_code=$?
         
         # Clear line and show cursor
-        printf "\r\e[K"
+        printf "\r\033[K"
         tput cnorm 2>/dev/null
         return $exit_code
     else
@@ -93,11 +93,11 @@ clear_screen() {
 
 # Clear and draw banner
 clear_screen
-echo -e "${CLR_MAGENTA}${CLR_BOLD}"
+printf "${CLR_MAGENTA}${CLR_BOLD}\n"
 echo "  ┌────────────────────────────────────────────────────────┐"
 echo "  │   ▲ STEALTH DOWNLOADER — High-Speed Telegram Daemon    │"
 echo "  └────────────────────────────────────────────────────────┘"
-echo -e "${CLR_RESET}"
+printf "${CLR_RESET}\n"
 
 typewriter "${CLR_BOLD}Starting system diagnostics & installation...${CLR_RESET}"
 echo
@@ -117,33 +117,51 @@ python_ver=$(python3 --version 2>&1)
 printf "\r${CLR_GREEN}[✓]${CLR_RESET} Python3 found: $python_ver\n"
 sleep 0.3
 
-# 2. Check Pip
-if [ "$IS_TTY" -eq 1 ]; then
-    printf "${CLR_CYAN}[⠋]${CLR_RESET} Checking pip package manager..."
-    sleep 0.5
-fi
+# 2. Virtual Environment / Dependency Resolution
+PY_CMD="python3"
+PIP_CMD="pip3"
 
-if ! command -v pip3 &> /dev/null; then
-    printf "\r${CLR_RED}[x]${CLR_RESET} Error: pip3 is not installed.\n"
-    typewriter "Please install pip3 for Python and try again."
-    exit 1
-fi
-printf "\r${CLR_GREEN}[✓]${CLR_RESET} pip3 is ready.\n"
-sleep 0.3
-
-# 3. Install Dependencies
 echo
-typewriter "${CLR_BOLD}Resolving dependencies...${CLR_RESET}"
-run_with_spinner "pip3 install -r requirements.txt" "Installing python packages (telethon, cryptg, rich, dotenv)"
-if [ $? -ne 0 ]; then
-    echo -e "${CLR_RED}[x] Failed to install dependencies via pip3.${CLR_RESET}"
+typewriter "${CLR_BOLD}Setting up virtual environment & dependencies...${CLR_RESET}"
+
+# Attempt venv creation to support Debian PEP 668 externally-managed environments
+if [ ! -d "venv" ]; then
+    run_with_spinner "python3 -m venv venv" "Creating isolated virtual environment (venv)"
+fi
+
+if [ -f "venv/bin/pip" ]; then
+    PY_CMD="./venv/bin/python"
+    PIP_CMD="./venv/bin/pip"
+    printf "${CLR_GREEN}[✓] Using isolated venv environment at ./venv${CLR_RESET}\n"
+    run_with_spinner "$PIP_CMD install -r requirements.txt" "Installing python packages (telethon, cryptg, rich, dotenv)"
+    INSTALL_RES=$?
+else
+    printf "${CLR_YELLOW}[!] venv module not found, attempting system pip installation...${CLR_RESET}\n"
+    run_with_spinner "pip3 install -r requirements.txt --break-system-packages" "Installing python packages via system pip"
+    INSTALL_RES=$?
+fi
+
+if [ $INSTALL_RES -ne 0 ]; then
+    printf "${CLR_RED}[x] Failed to install dependencies via pip.${CLR_RESET}\n"
+    printf "On Debian/Ubuntu, please install python3-venv: sudo apt install python3-venv\n"
     exit 1
 fi
-echo -e "${CLR_GREEN}[✓] Dependencies successfully resolved.${CLR_RESET}"
+printf "${CLR_GREEN}[✓] Dependencies successfully resolved.${CLR_RESET}\n"
 sleep 0.5
 
-# 4. Launch Configuration Wizard
+# 3. Launch Configuration Wizard
 echo
 typewriter "${CLR_BOLD}Launching configuration wizard...${CLR_RESET}"
 sleep 0.5
-python3 configure.py
+$PY_CMD configure.py
+
+# 4. Background Service Prompt
+echo
+if [ -f "start.sh" ]; then
+    chmod +x start.sh
+fi
+
+typewriter "${CLR_BOLD}Installation finished!${CLR_RESET}"
+printf "${CLR_CYAN}To run as a continuous background daemon that survives reboots:${CLR_RESET}\n"
+printf "  • Start in background:   ${CLR_BOLD}./start.sh start${CLR_BOLD}\n"
+printf "  • Install system service: ${CLR_BOLD}sudo cp stealth-dl.service /etc/systemd/system/ && sudo systemctl enable --now stealth-dl${CLR_RESET}\n\n"

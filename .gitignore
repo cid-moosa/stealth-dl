@@ -11,3 +11,6 @@ stealth_bot.session.journal
 *.session-journal
 *.session.journal
 stealth_dl_local.py
+venv/
+stealth_dl.log
+stealth_dl.pid
