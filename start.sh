@@ -8,10 +8,35 @@ CDIR="$DIR"
 PID_FILE="$CDIR/stealth_dl.pid"
 LOG_FILE="$CDIR/stealth_dl.log"
 
+# Pre-flight self-healing dependency verification
+check_and_heal_dependencies() {
+    local needs_heal=0
+
+    if [ -f "$CDIR/venv/bin/python" ]; (
+        PYTHON_BIN="$CDIR/venv/bin/python"
+    ); else
+        PYTHON_BIN="$(which python3 2>/dev/null)"
+    fi
+
+    if [ -z "$PYTHON_BIN" ]; then
+        needs_heal=1
+    else
+        "$PYTHON_BIN" -c "import telethon, rich, dotenv" >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            needs_heal=1
+        fi
+    fi
+
+    if [ $needs_heal -eq 1 ]; then
+        echo -e "\033[33m[!] Missing or incomplete dependencies detected. Triggering auto-installation... \033[0m"
+        bash "$CDIR/install.sh" --auto
+    fi
+}
+
 if [ -f "$CDIR/venv/bin/python" ]; then
     PYTHON_BIN="$CDIR/venv/bin/python"
 else
-    PYTHON_BIN="$(which python3)"
+    PYTHON_BIN="$(which python3 2>/dev/null)"
 fi
 
 if [ -f "$CDIR/stealth_dl_local.py" ]; then
@@ -28,11 +53,17 @@ get_pid() {
             return 0
         fi
     fi
-    # Fallback process search
     pgrep -f "python.*stealth_dl" | head -n 1
 }
 
 start_daemon() {
+    check_and_heal_dependencies
+
+    # Refresh python binary path in case venv was created by self-healing
+    if [ -f "$CDIR/venv/bin/python" ]; then
+        PYTHON_BIN="$CDIR/venv/bin/python"
+    fi
+
     local pid=$(get_pid)
     if [ -n "$pid" ]; then
         echo -e "\033[33m[!] Stealth Downloader is already running in background (PID: $pid).\033[0m"
@@ -82,6 +113,8 @@ status_daemon() {
 }
 
 install_systemd_service() {
+    check_and_heal_dependencies
+
     if [ "$EUID" -ne 0 ]; then
         echo -e "\033[33m[!] Systemd service installation requires root privileges.\033[0m"
         echo -e "Please re-run: \033[1msudo ./start.sh install-service\033[0m"

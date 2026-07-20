@@ -81,6 +81,22 @@ run_with_spinner() {
     fi
 }
 
+# Helper to automatically install missing system packages
+auto_install_system_deps() {
+    local sudo_cmd=""
+    if [ "$EUID" -ne 0 ] && command -v sudo &>/dev/null; then
+        sudo_cmd="sudo"
+    fi
+
+    if command -v apt-get &>/dev/null; then
+        run_with_spinner "$sudo_cmd apt-get update -y && $sudo_cmd apt-get install -y python3 python3-venv python3-pip python3-full build-essential" "Auto-installing Debian/Ubuntu system packages (python3, venv, pip)"
+    elif command -v dnf &>/dev/null; then
+        run_with_spinner "$sudo_cmd dnf install -y python3 python3-pip gcc" "Auto-installing Fedora/RHEL system packages"
+    elif command -v pacman &>/dev/null; then
+        run_with_spinner "$sudo_cmd pacman -Sy --noconfirm python python-pip gcc" "Auto-installing Arch system packages"
+    fi
+}
+
 clear_screen() {
     if [ "$IS_TTY" -eq 1 ]; then
         clear
@@ -95,74 +111,82 @@ echo "  │   ▲ STEALTH DOWNLOADER — High-Speed Telegram Daemon    │"
 echo "  └────────────────────────────────────────────────────────┘"
 printf "${CLR_RESET}\n"
 
-typewriter "${CLR_BOLD}Starting system diagnostics & installation...${CLR_RESET}"
+typewriter "${CLR_BOLD}Starting automated system diagnostics & self-healing installer...${CLR_RESET}"
 echo
 
-# 1. Check Python
-if [ "$IS_TTY" -eq 1 ]; then
-    printf "${CLR_CYAN}[⠋]${CLR_RESET} Checking Python3 environment..."
-    sleep 0.5
+# 1. System Package Check & Auto-Install
+if ! command -v python3 &>/dev/null; then
+    printf "${CLR_YELLOW}[!] python3 not found. Triggering automated system package installation...${CLR_RESET}\n"
+    auto_install_system_deps
 fi
 
-if ! command -v python3 &> /dev/null; then
-    printf "\r${CLR_RED}[x]${CLR_RESET} Error: python3 is not installed or not in PATH.\n"
-    typewriter "Please install Python 3.12+ and try again."
+if ! command -v python3 &>/dev/null; then
+    printf "${CLR_RED}[x] Error: Could not auto-install Python3. Please install Python 3.12+ manually.${CLR_RESET}\n"
     exit 1
 fi
 python_ver=$(python3 --version 2>&1)
-printf "\r${CLR_GREEN}[✓]${CLR_RESET} Python3 found: $python_ver\n"
+printf "${CLR_GREEN}[✓] Python3 environment verified: $python_ver${CLR_RESET}\n"
 sleep 0.3
 
-# 2. Virtual Environment & Dependency Resolution
+# 2. Virtual Environment & Auto Dependency Resolution
 echo
-typewriter "${CLR_BOLD}Setting up virtual environment & dependencies...${CLR_RESET}"
+typewriter "${CLR_BOLD}Resolving & auto-updating Python dependencies...${CLR_RESET}"
 
-# Create virtualenv if not present
+# Attempt venv creation; if it fails, auto-install python3-venv packages and retry
 if [ ! -d "venv" ]; then
     run_with_spinner "python3 -m venv venv" "Creating isolated virtual environment (venv)"
+    if [ $? -ne 0 ]; then
+        printf "${CLR_YELLOW}[!] venv creation failed. Auto-installing system venv packages...${CLR_RESET}\n"
+        auto_install_system_deps
+        run_with_spinner "python3 -m venv venv" "Retrying virtual environment creation"
+    fi
 fi
 
 if [ -f "venv/bin/python" ]; then
     PY_CMD="./venv/bin/python"
     # Ensure pip is bootstrapped inside venv
     $PY_CMD -m ensurepip --default-pip >/dev/null 2>&1
+    $PY_CMD -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1
     
     printf "${CLR_GREEN}[✓] Using isolated venv environment at ./venv${CLR_RESET}\n"
-    run_with_spinner "$PY_CMD -m pip install -r requirements.txt" "Installing python packages (telethon, cryptg, rich, dotenv)"
+    run_with_spinner "$PY_CMD -m pip install --upgrade -r requirements.txt" "Auto-updating python packages (telethon, cryptg, rich, dotenv)"
     INSTALL_RES=$?
     
     # Fallback if cryptg C-compiler build failed on minimal Linux
     if [ $INSTALL_RES -ne 0 ]; then
         printf "${CLR_YELLOW}[!] Installing core dependencies (without C-compiled cryptg module)...${CLR_RESET}\n"
-        run_with_spinner "$PY_CMD -m pip install telethon python-dotenv rich" "Installing core python packages"
+        run_with_spinner "$PY_CMD -m pip install --upgrade telethon python-dotenv rich" "Installing core python packages"
         INSTALL_RES=$?
     fi
 else
     # Fallback for system environment
     PY_CMD="python3"
     printf "${CLR_YELLOW}[!] venv not found, attempting system pip installation...${CLR_RESET}\n"
-    run_with_spinner "python3 -m pip install -r requirements.txt --break-system-packages" "Installing python packages via system pip"
+    run_with_spinner "python3 -m pip install --upgrade -r requirements.txt --break-system-packages" "Installing python packages via system pip"
     INSTALL_RES=$?
     
     if [ $INSTALL_RES -ne 0 ]; then
-        run_with_spinner "python3 -m pip install telethon python-dotenv rich --break-system-packages" "Installing core python packages"
+        run_with_spinner "python3 -m pip install --upgrade telethon python-dotenv rich --break-system-packages" "Installing core python packages"
         INSTALL_RES=$?
     fi
 fi
 
 if [ $INSTALL_RES -ne 0 ]; then
-    printf "${CLR_RED}[x] Failed to install dependencies.${CLR_RESET}\n"
-    printf "On Debian/Ubuntu, please run: sudo apt install python3-pip python3-full\n"
-    exit 1
+    printf "${CLR_RED}[x] Dependency resolution failed. Triggering system repair...${CLR_RESET}\n"
+    auto_install_system_deps
+    $PY_CMD -m pip install --upgrade telethon python-dotenv rich 2>/dev/null
 fi
-printf "${CLR_GREEN}[✓] Dependencies successfully resolved.${CLR_RESET}\n"
+
+printf "${CLR_GREEN}[✓] Dependencies successfully resolved and verified.${CLR_RESET}\n"
 sleep 0.5
 
-# 3. Launch Configuration Wizard
-echo
-typewriter "${CLR_BOLD}Launching configuration wizard...${CLR_RESET}"
-sleep 0.5
-$PY_CMD configure.py
+# 3. Launch Configuration Wizard (if not running non-interactive automated mode)
+if [ "$1" != "--auto" ] && [ "$1" != "-y" ]; then
+    echo
+    typewriter "${CLR_BOLD}Launching configuration wizard...${CLR_RESET}"
+    sleep 0.5
+    $PY_CMD configure.py
+fi
 
 # 4. Background Service Prompt
 echo
@@ -170,7 +194,7 @@ if [ -f "start.sh" ]; then
     chmod +x start.sh
 fi
 
-typewriter "${CLR_BOLD}Installation finished!${CLR_RESET}"
+typewriter "${CLR_BOLD}Automated installation completed successfully!${CLR_RESET}"
 printf "${CLR_CYAN}To run as a continuous background daemon that survives reboots:${CLR_RESET}\n"
 printf "  • Start in background:   ${CLR_BOLD}./start.sh start${CLR_BOLD}\n"
 printf "  • Install system service: ${CLR_BOLD}sudo ./start.sh install-service${CLR_RESET}\n\n"
